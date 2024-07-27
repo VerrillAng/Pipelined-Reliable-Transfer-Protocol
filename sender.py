@@ -13,54 +13,11 @@ msg_buffer = {}
 active_timers = {}
 base = 0
 receiving_ack = True
-
-def timeout():
-    global base, next_seq_num, msg_buffer, active_timers
-    seq_nums = list(range(base, next_seq_num))
-    print(f"Timeout for seq={base}. Resending packets: {seq_nums}")
-    for i in seq_nums:
-        send_packet(i)
-
-    if base < next_seq_num:
-        init_timer(base)
-    
-
-def init_timer(seq_num):
-    global active_timers
-    timer = threading.Timer(TIME_OUT, timeout)
-    active_timers[seq_num] = timer
-    timer.start()
-
-def terminate_timer(seq_num):
-    global active_timers
-    if seq_num in active_timers:
-        active_timers[seq_num].cancel()
-        del active_timers[seq_num]
+clientSocket = 0
+serverName = ""
+serverPort = 0
 
 
-def send_packet(seq, clientSocket, serverName, serverPort):
-    global msg_buffer
-    if seq in msg_buffer:
-        message = msg_buffer[seq]
-        message = f"{seq}, {message}"
-        print(f"Sending seq={seq}")
-        clientSocket.sendto(message.encode(), (serverName, serverPort))
-    return
-
-def send_message(message, clientSocket, serverName, serverPort):
-    global msg_buffer, next_seq_num, used_window
-    msg_buffer[next_seq_num] = message
-    receiving_ack = True
-    while used_window < WINDOW_SIZE_N:
-        send_packet(next_seq_num, clientSocket, serverName, serverPort)
-        if base == next_seq_num:
-            init_timer(next_seq_num)
-        message_length = len(message)
-        next_seq_num = next_seq_num + message_length
-        used_window = used_window + 1
-
-
-    
 
 def three_way_handshake(clientSocket, serverName, serverPort):
     # Send TCP SYN msg
@@ -93,9 +50,57 @@ def three_way_handshake(clientSocket, serverName, serverPort):
 
     return False
 
+def timeout():
+    global base, next_seq_num, msg_buffer, active_timers, clientSocket, serverPort, serverName
+    seq_nums = list(range(base, next_seq_num))
+    print(f"Timeout for seq={base}. Resending packets: {seq_nums}")
+    for i in seq_nums:
+        send_packet(i, clientSocket, serverName, serverPort)
+
+    if base < next_seq_num:
+        init_timer(base)
+    
+
+def init_timer(seq_num):
+    global active_timers
+    timer = threading.Timer(TIME_OUT, timeout)
+    active_timers[seq_num] = timer
+    timer.start()
+
+def terminate_timer(seq_num):
+    global active_timers
+    if seq_num in active_timers:
+        active_timers[seq_num].cancel()
+        del active_timers[seq_num]
+
+
+def send_packet(seq, clientSocket, serverName, serverPort):
+    global msg_buffer
+    if seq in msg_buffer:
+        message = msg_buffer[seq]
+        message = f"{seq}, {message}"
+        print(f"Sending seq={seq}")
+        clientSocket.sendto(message.encode(), (serverName, serverPort))
+    return
+
+def send_message(message, clientSocket, serverName, serverPort):
+    global msg_buffer, next_seq_num, used_window, receiving_ack
+    msg_buffer[next_seq_num] = message
+    receiving_ack = True
+    while used_window < WINDOW_SIZE_N:
+        send_packet(next_seq_num, clientSocket, serverName, serverPort)
+        if base == next_seq_num:
+            init_timer(next_seq_num)
+        message_length = len(message)
+        next_seq_num = next_seq_num + message_length
+        used_window = used_window + 1
+
+
+    
+
 #Format of ACK: {ACK={num}}
 def receive_ack(clientSocket):
-    global base, msg_buffer, active_timers, next_seq_num, receiving_ack
+    global base, msg_buffer, active_timers, next_seq_num, receiving_ack, used_window
     num = 0
     while receiving_ack: 
         reply, _ = clientSocket.recvfrom(2048)
@@ -117,6 +122,7 @@ def receive_ack(clientSocket):
 
 
 def main():
+    global serverName, serverPort, clientSocket
     # Initialize the conenction
     init = input("Type '-I' to initialize the connection: ")
     if (init.strip() == '-I'):
