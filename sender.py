@@ -16,13 +16,14 @@ receiving_ack = True
 clientSocket = 0
 serverName = ""
 serverPort = 0
-
+expected_ack = 0
+lock = threading.Lock()
 
 
 def three_way_handshake(clientSocket, serverName, serverPort):
     # Send TCP SYN msg
     # seq_num = random.randint(0, 10000)
-    global next_seq_num
+    global next_seq_num, base
     seq_num = 0
     msg = f"1,{seq_num},0,0" # message = (SYNbit, SeqNum, ACKbit, ACKnum)
     clientSocket.sendto(msg.encode(), (serverName, serverPort))
@@ -38,7 +39,8 @@ def three_way_handshake(clientSocket, serverName, serverPort):
         print(f"Received: SYNACK(x), seq={synAck_msg[1]}, ACKnum={synAck_msg[3]}")
         seq_num = synAck_msg[1]
         next_seq_num = int(seq_num) + 1
-
+        base = next_seq_num
+        
         # Send ACK for SYNACK
         ack_num = int(synAck_msg[1]) + 1
         msg = f"0,0,1,{ack_num}"
@@ -52,12 +54,13 @@ def three_way_handshake(clientSocket, serverName, serverPort):
 
 def timeout():
     global base, next_seq_num, msg_buffer, active_timers, clientSocket, serverPort, serverName
-    seq_nums = list(range(base, next_seq_num))
-    print(f"Timeout for seq={base}. Resending packets: {seq_nums}")
-    for i in seq_nums:
-        send_packet(i, clientSocket, serverName, serverPort)
+    with lock: 
+        seq_nums = list(range(base, next_seq_num))
+        print()
+        print(f"Timeout for seq={base}. Resending packets: {seq_nums}")
+        for i in seq_nums:
+            send_packet(i, clientSocket, serverName, serverPort)
 
-    if base < next_seq_num:
         init_timer(base)
     
 
@@ -78,46 +81,57 @@ def send_packet(seq, clientSocket, serverName, serverPort):
     global msg_buffer
     if seq in msg_buffer:
         message = msg_buffer[seq]
-        message = f"{seq}, {message}"
-        print(f"Sending seq={seq}")
+        message = f"{seq}:{message}" #Format message: seq num:message
+        print(f"Sent: seq={seq}")
         clientSocket.sendto(message.encode(), (serverName, serverPort))
-    return
-
-def send_message(message, clientSocket, serverName, serverPort):
-    global msg_buffer, next_seq_num, used_window, receiving_ack
-    msg_buffer[next_seq_num] = message
-    receiving_ack = True
-    while used_window < WINDOW_SIZE_N:
-        send_packet(next_seq_num, clientSocket, serverName, serverPort)
-        if base == next_seq_num:
-            init_timer(next_seq_num)
-        message_length = len(message)
-        next_seq_num = next_seq_num + message_length
-        used_window = used_window + 1
-
-
     
 
+def send_message(message, clientSocket, serverName, serverPort):
+    global msg_buffer, next_seq_num, used_window, expected_ack, base
+  
+    with lock:
+        msg_buffer[next_seq_num] = message
+        message_length = len(message)
+        
+        # Send packets within the window size
+        if used_window < WINDOW_SIZE_N:
+            send_packet(next_seq_num, clientSocket, serverName, serverPort)
+            
+            if base == next_seq_num:
+                init_timer(next_seq_num)
+                expected_ack = base + message_length
+    
+            next_seq_num += message_length
+            used_window += 1
+
+    
+#TODO: Modify ACK: base num
 #Format of ACK: {ACK={num}}
-def receive_ack(clientSocket):
-    global base, msg_buffer, active_timers, next_seq_num, receiving_ack, used_window
+def receive_ack():
+    global base, msg_buffer, active_timers, next_seq_num, receiving_ack, used_window, clientSocket
     num = 0
-    while receiving_ack: 
+
+    while True: #ACK: base, acknum
+       
         reply, _ = clientSocket.recvfrom(2048)
-        reply = reply.decode().split('=')
+        reply = reply.decode()
+        reply = reply.strip("()").split(',')
+        reply_base = int(reply[0])
         num = int(reply[1])
-        if num >= base:
-            for i in range(base, num + 1):
-                terminate_timer(i)
-                if i in msg_buffer:
-                    del msg_buffer[i]
-                used_window = used_window - 1
-                base = num + 1
-                print(f"Received ACK={num}")
-                if base < next_seq_num:
+        with lock:
+            if expected_ack == num:
+                print("\n")
+                print(f"Received ACK:{num}")
+                terminate_timer(base)
+                del msg_buffer[base]
+                used_window -= 1
+                base = num
+                if(base == next_seq_num):
+                    print("All packets acked.")
+                else:
                     init_timer(base)
-        if base == next_seq_num:
-            receiving_ack = False
+            elif num < expected_ack:
+                print(f"Ignore duplicate ack:{num}")
 
 
 
@@ -135,6 +149,9 @@ def main():
         
         # Three-Way Handshake
         if (three_way_handshake(clientSocket, serverName, serverPort) == True):
+            receivingAck_t = threading.Thread(target=receive_ack)
+            receivingAck_t.start()
+            
             while True:
                 # Get keyboard input 
                 message = input("Input Lowercase Sentence or '-C' to close: ")
@@ -146,7 +163,7 @@ def main():
 
 
                 send_message(message, clientSocket, serverName, serverPort)
-                receive_ack(clientSocket)
+                
                 # Read reply characters from socket into string
                 # modifiedMessage, serverAddress = clientSocket.recvfrom(2048)
 
