@@ -13,7 +13,8 @@ def three_way_handshake(serverSocket):
         ack_num = int(syn_msg[1]) + 1
 
         # Send SYNACK msg
-        seq = random.randint(0, 10000)
+        # seq = random.randint(0, 10000)
+        seq = 0
         msg = f"1,{seq},1,{ack_num}"
         serverSocket.sendto(msg.encode(), clientAddress)
         print(f"Sent: SYNACK, seq={seq}, ACKnum={ack_num}")
