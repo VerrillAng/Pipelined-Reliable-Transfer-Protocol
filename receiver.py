@@ -1,6 +1,7 @@
 from socket import *
-import random
+import random 
 
+expected_num = 0
 def three_way_handshake(serverSocket):
     syn_msg, clientAddress = serverSocket.recvfrom(2048)
     syn_msg = syn_msg.decode().split(',')
@@ -33,6 +34,9 @@ def three_way_handshake(serverSocket):
 
     return False
 
+def receive_msg(serverSocket):
+
+    return
 
 def main():
     # Define Server Port
@@ -48,14 +52,15 @@ def main():
 
     if (three_way_handshake(serverSocket) == True):
         while True:
-            # Read from socket
-            message, clientAddress = serverSocket.recvfrom(2048)
+            receive_msg(serverSocket)
+            # # Read from socket
+            # message, clientAddress = serverSocket.recvfrom(2048)
 
-            # Upper Case
-            modifiedMessage = message.decode().upper()
+            # # Upper Case
+            # modifiedMessage = message.decode().upper()
 
-            # Send modified message to client
-            serverSocket.sendto(modifiedMessage.encode(), clientAddress)
+            # # Send modified message to client
+            # serverSocket.sendto(modifiedMessage.encode(), clientAddress)
 
 
 if __name__ == '__main__':
