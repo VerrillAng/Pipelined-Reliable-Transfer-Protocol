@@ -18,6 +18,7 @@ serverName = ""
 serverPort = 0
 expected_ack = 0
 lock = threading.Lock()
+cwnd = 4
 
 
 def three_way_handshake(clientSocket, serverName, serverPort):
@@ -53,13 +54,25 @@ def three_way_handshake(clientSocket, serverName, serverPort):
     return False
 
 def timeout():
-    global base, next_seq_num, msg_buffer, active_timers, clientSocket, serverPort, serverName
+    global base, next_seq_num, msg_buffer, active_timers, clientSocket, serverPort, serverName, cwnd, used_window
     with lock: 
         seq_nums = list(range(base, next_seq_num))
         print()
-        print(f"Timeout for seq={base}. Resending packets: {seq_nums}")
+        print(f"Timeout for seq={base}. Resending packets: {list(msg_buffer.keys())}")
         for i in seq_nums:
             send_packet(i, clientSocket, serverName, serverPort)
+
+
+        #Minimum number of cwnd will be 4
+        if(cwnd >= 8):
+            cwnd = cwnd // 2
+            index = cwnd
+            keys = list(msg_buffer.keys())
+            keys_to_delete = keys[index:]
+            for key in keys_to_delete:
+                del msg_buffer[key]
+            used_window = len(msg_buffer)
+
 
         init_timer(base)
     
@@ -87,14 +100,14 @@ def send_packet(seq, clientSocket, serverName, serverPort):
     
 
 def send_message(message, clientSocket, serverName, serverPort):
-    global msg_buffer, next_seq_num, used_window, expected_ack, base
+    global msg_buffer, next_seq_num, used_window, expected_ack, base, cwnd
   
     with lock:
         msg_buffer[next_seq_num] = message
         message_length = len(message)
         
         # Send packets within the window size
-        if used_window < WINDOW_SIZE_N:
+        if used_window < cwnd:
             send_packet(next_seq_num, clientSocket, serverName, serverPort)
             
             if base == next_seq_num:
@@ -103,12 +116,14 @@ def send_message(message, clientSocket, serverName, serverPort):
     
             next_seq_num += message_length
             used_window += 1
+        else:
+            print(f"CWND is full. Resend or wait for ACK reply.")
 
     
 #TODO: Modify ACK: base num
 #Format of ACK: {ACK={num}}
 def receive_ack():
-    global base, msg_buffer, active_timers, next_seq_num, receiving_ack, used_window, clientSocket
+    global base, msg_buffer, active_timers, next_seq_num, receiving_ack, used_window, clientSocket, cwnd
     num = 0
 
     while True: #ACK: base, acknum
@@ -130,6 +145,9 @@ def receive_ack():
                     print("All packets acked.")
                 else:
                     init_timer(base)
+
+                cwnd = cwnd + 1
+
             elif num < expected_ack:
                 print(f"Ignore duplicate ack:{num}")
 
