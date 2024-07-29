@@ -18,6 +18,7 @@ serverName = ""
 serverPort = 0
 expected_ack = 0
 lock = threading.Lock()
+thread_continue = True
 
 
 def three_way_handshake(clientSocket, serverName, serverPort):
@@ -60,10 +61,11 @@ def three_way_handshake(clientSocket, serverName, serverPort):
                 else:
                     print(f"Incorect packet received, expected ACKnum = {seq_num + 1}")
 
-        except timeout:
+        except TimeoutError:
             print("Timeout waiting for SYNACK")
     
     print("Failed to receive SYNACK! Terminating...")
+    clientSocket.settimeout(None)
     return False
 
 def timeout():
@@ -96,10 +98,10 @@ def send_packet(seq, clientSocket, serverName, serverPort):
     if seq in msg_buffer:
         message = msg_buffer[seq]
         message = f"{seq}:{message}" #Format message: seq num:message
-        print(f"Sent: seq={seq}")
         clientSocket.sendto(message.encode(), (serverName, serverPort))
+        print(f"Sent: seq={seq}")
+        
     
-
 def send_message(message, clientSocket, serverName, serverPort):
     global msg_buffer, next_seq_num, used_window, expected_ack, base
   
@@ -122,34 +124,34 @@ def send_message(message, clientSocket, serverName, serverPort):
 #TODO: Modify ACK: base num
 #Format of ACK: {ACK={num}}
 def receive_ack():
-    global base, msg_buffer, active_timers, next_seq_num, receiving_ack, used_window, clientSocket
+    global base, msg_buffer, active_timers, next_seq_num, receiving_ack, used_window, clientSocket, thread_continue
     num = 0
 
-    while True: #ACK: base, acknum
-       
-        reply, _ = clientSocket.recvfrom(2048)
-        reply = reply.decode()
-        reply = reply.strip("()").split(',')
-        reply_base = int(reply[0])
-        num = int(reply[1])
-        with lock:
-            if expected_ack == num:
-                print("\n")
-                print(f"Received ACK:{num}")
-                terminate_timer(base)
-                del msg_buffer[base]
-                used_window -= 1
-                base = num
-                if(base == next_seq_num):
-                    print("All packets acked.")
-                else:
-                    init_timer(base)
-            elif num < expected_ack:
-                print(f"Ignore duplicate ack:{num}")
+    # while True: #ACK: base, acknum
+    # while thread_continue == True: #ACK: base, acknum
+    reply, _ = clientSocket.recvfrom(2048)
+    reply = reply.decode()
+    reply = reply.strip("()").split(',')
+    reply_base = int(reply[0])
+    num = int(reply[1])
+    with lock:
+        if expected_ack == num:
+            print(f"Received ACK:{num}")
+            terminate_timer(base)
+            del msg_buffer[base]
+            used_window -= 1
+            base = num
+            if(base == next_seq_num):
+                print("All packets acked.\n")
+            else:
+                init_timer(base)
+        elif num < expected_ack:
+            print(f"Ignore duplicate ack:{num}")
 
 
 def close_connection(clientSocket, serverName, serverPort):
-    global next_seq_num
+    global next_seq_num, thread_continue
+    thread_continue = False
     client_state = "ESTAB"
 
     # Send FIN Packet
@@ -175,7 +177,7 @@ def close_connection(clientSocket, serverName, serverPort):
                 # Correct packet received
                 if (int(ack_msg[1]) == next_seq_num + 1):
                     client_state = "FIN_WAIT_2"
-                    print("Now waiting for server FIN")
+                    print("Now waiting for server FIN\n")
                     clientSocket.settimeout(None)
                     break
 
@@ -186,7 +188,7 @@ def close_connection(clientSocket, serverName, serverPort):
             else:
                 print("Packet received is not ACK packet")
 
-        except timeout:
+        except TimeoutError:
             print("Timeout waiting for ACK")
 
     if client_state == "FIN_WAIT_2":
@@ -203,32 +205,35 @@ def close_connection(clientSocket, serverName, serverPort):
                     print(f"Message Received! {fin_msg}")
 
                 if (fin_msg[0] == 'FIN'):
-                    print(f"Received: FIN, seq = {fin_msg[1]}\n")
+                    print(f"Received: FIN, seq = {fin_msg[1]}")
 
                     # Reply with ACK
                     msg = f"ACK:{int(fin_msg[1]) + 1}"
-                    print(f"Sent: ACK, ACKnum = {int(fin_msg[1]) + 1}")
+                    clientSocket.sendto(msg.encode(), (serverName, serverPort))
+                    print(f"Sent: ACK, ACKnum = {int(fin_msg[1]) + 1}\n")
                     client_state = "TIMED_WAIT"
                     clientSocket.settimeout(None)
                     break
                 
-                # When it's a data packet
-                else:
-                    # TODO
-                    print("HELLO")
+                # # When it's a data packet
+                # else:
+                #     # TODO
+                #     print("HELLO")
 
-            except timeout:
+            except TimeoutError:
                 print("Timeout waiting for FIN")
 
         # No FIN received
         if client_state != "TIMED_WAIT":
             print("Error: No FIN received from sender, shutting down...")
+            clientSocket.settimeout(None)
             clientSocket.close()
             return
 
     # Failed getting ACK
     else:
         print("Error: Failed receiving ACK packet, shutting down...")
+        clientSocket.settimeout(None)
         clientSocket.close()
         return
 
@@ -239,29 +244,33 @@ def close_connection(clientSocket, serverName, serverPort):
         try:
             # Receive any retransmission of FIN packet
             fin_msg, serverAddress = clientSocket.recvfrom(2048)
-            fin_msg = fin_msg.decode().split(',')
+            fin_msg = fin_msg.decode().split(':')
             if (fin_msg != None):
                 print(f"Message Received! {fin_msg}")
 
             if (fin_msg[0] == 'FIN'):
-                print(f"Received: FIN, seq = {fin_msg[1]}\n")
+                print(f"Received: FIN, seq = {fin_msg[1]}")
 
                 # Reply with ACK
-                msg = f"ACK,{int(fin_msg) + 1}"
-                print(f"Sent: ACK, ACKnum = {int(fin_msg) + 1}")
+                msg = f"ACK,{int(fin_msg[1]) + 1}"
+                clientSocket.sendto(msg.encode(), (serverName, serverPort))
+                print(f"Sent: ACK, ACKnum = {int(fin_msg[1]) + 1}\n")
+
                 client_state = "TIMED_WAIT"               
 
             else:
                 print("Packet received is not FIN packet")
 
-        except timeout:
+        except TimeoutError:
             print("Sender closed connection")
             client_state = "CLOSED"
+            clientSocket.settimeout(None)
             clientSocket.close()
             return
     
     # Failed receiving FIN
     print("Error: Failed receiving FIN packet, shutting down...")
+    clientSocket.settimeout(None)
     clientSocket.close()
     return
 
@@ -273,30 +282,31 @@ def main():
     if (init.strip() == '-I'):
         # Define Server IP Address and Port
         serverName = 'localhost'
-        serverPort = 12005
+        serverPort = 12006
 
         # Create UDP Socket for Client
         clientSocket = socket(AF_INET, SOCK_DGRAM)
         
         # Three-Way Handshake
         if (three_way_handshake(clientSocket, serverName, serverPort) == True):
-            receivingAck_t = threading.Thread(target=receive_ack)
-            receivingAck_t.start()
+            # receivingAck_t = threading.Thread(target=receive_ack)
+            # receivingAck_t.start()
             
             while True:
-                # Get keyboard input 
+                # Get keyboard input
+                time.sleep(0.1) 
                 message = input("Input Lowercase Sentence or '-C' to close: ")
                 if (message.strip() == '-C'):
                     # Close client socket
+                    # receivingAck_t.join()
                     print("Closing connection...")
-
-                    print("Connection Closed")
+                    close_connection(clientSocket, serverName, serverPort)
+                    # print("Connection Closed")
                     clientSocket.close()
                     break
 
-
                 send_message(message, clientSocket, serverName, serverPort)
-                
+                receive_ack()
                 # Read reply characters from socket into string
                 # modifiedMessage, serverAddress = clientSocket.recvfrom(2048)
 

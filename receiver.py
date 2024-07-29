@@ -1,5 +1,6 @@
 from socket import *
 import random 
+import sys
 
 
 expected_seq_base = 0
@@ -49,7 +50,7 @@ def three_way_handshake(serverSocket):
                 else:
                     print("Packet received is not ACK packet")
 
-            except timeout:
+            except TimeoutError:
                  print("Timeout waiting for ACK")
 
         print("Failed to receive ACK")
@@ -75,7 +76,7 @@ def receive_msg():
         # If Close Connection
         if msg[0] == "FIN":
             close_connection(serverSocket, msg, clientAddress)
-            return
+            sys.exit()
 
         # Data packet
         base = int(msg[0].strip())
@@ -97,12 +98,54 @@ def close_connection(serverSocket, fin_msg, clientAddress):
     server_state = "ESTAB"
 
     # Send ACK
-    
+    msg = f"ACK:{int(fin_msg[1]) + 1}"
+    serverSocket.sendto(msg.encode(), clientAddress)
+    print(f"Sent: ACK, ACKnum = {int(fin_msg[1]) + 1}\n")
+    server_state = "CLOSE_WAIT"
+
+    for i in range(5):
+        # Send FIN
+        msg = f"FIN:{expected_seq_base}"
+        serverSocket.sendto(msg.encode(), clientAddress)
+        print(f"Sent: FIN, seq = {expected_seq_base}\n")
+        server_state = "LAST_ACK"
+
+        # Wait for ACK
+        serverSocket.settimeout(5)
+
+        try:
+            # Receive ACK
+            ack_msg, clientAddress = serverSocket.recvfrom(2048)
+            ack_msg = ack_msg.decode().split(':') 
+            if (ack_msg != None):
+                print(f"Message Received! {ack_msg}")
+
+            if (ack_msg[0] == 'ACK'):
+                print(f"Received: ACK, ACKnum = {int(ack_msg[1])}")
+                if (int(ack_msg[1]) == expected_seq_base + 1):
+                    print("Receiver Successfully Closed!")
+                    server_state = "CLOSED"
+                    serverSocket.settimeout(None)
+                    # serverSocket.close()
+                    return
+
+                else:
+                    print(f"Incorrect packet received, expected ACKnum = {expected_seq_base + 1}")
+        
+        except TimeoutError:
+            print("Timeout waiting for ACK")
+
+    # Failed to get ACK
+    print("Error: Failed to receive ACK, shutting down...")
+    serverSocket.settimeout(None)
+    serverSocket.close()
+    return
+
 
 def main():
     global serverSocket
     # Define Server Port
-    serverPort = 12005
+    serverPort = 12006
 
     # Create UDP Socket
     serverSocket = socket(AF_INET, SOCK_DGRAM)
