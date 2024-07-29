@@ -23,19 +23,36 @@ def three_way_handshake(serverSocket):
         seq = 0
         msg = f"1,{seq},1,{ack_num}"
         serverSocket.sendto(msg.encode(), clientAddress)
-        print(f"Sent: SYNACK, seq={seq}, ACKnum={ack_num}")
+        print(f"Sent: SYNACK, seq={seq}, ACKnum={ack_num}\n")
         expected_seq_base = ack_num
-        # Receive ACK(y)
-        ack_msg, clientAddress = serverSocket.recvfrom(2048)
-        ack_msg = ack_msg.decode().split(',')
-        if (ack_msg != None):
-            print(f"Message Received! {ack_msg}")
 
-        if ((ack_msg[0] == '0') and (ack_msg[2] == '1')):
-            print(f"Received: ACK, ACKnum={ack_msg[3]}")
-            print(f"! Three-Way Handshake Completed with address {clientAddress}!\n")
-            
-            return True
+        for i in range(5):
+            # Wait 5 seconds for ACK
+            serverSocket.settimeout(5)
+            try:
+                # Receive ACK(y)
+                ack_msg, clientAddress = serverSocket.recvfrom(2048)
+                ack_msg = ack_msg.decode().split(',')
+                if (ack_msg != None):
+                    print(f"Message Received! {ack_msg}")
+
+                if ((ack_msg[0] == '0') and (ack_msg[2] == '1')):
+                    print(f"Received: ACK, ACKnum={ack_msg[3]}")
+                    if (int(ack_msg[3]) == seq + 1):
+                        print(f"! Three-Way Handshake Completed with address {clientAddress}, Connection Established!\n")
+                        serverSocket.settimeout(None)
+                    else:
+                        print(f"Incorrect pakcet received, expected ACKnum = {seq + 1}")
+                    
+                    return True
+                
+                else:
+                    print("Packet received is not ACK packet")
+
+            except timeout:
+                 print("Timeout waiting for ACK")
+
+        print("Failed to receive ACK")
 
     return False
 
@@ -51,10 +68,16 @@ def receive_msg():
     global expected_seq_base, highest_base, serverSocket
 
     while True:
-        
         msg, clientAddress = serverSocket.recvfrom(2048)
         print("let's try")
         msg = msg.decode().split(':')
+
+        # If Close Connection
+        if msg[0] == "FIN":
+            close_connection(serverSocket, msg, clientAddress)
+            return
+
+        # Data packet
         base = int(msg[0].strip())
         message_string = msg[1].strip()
         message_length = len(message_string)
@@ -68,13 +91,18 @@ def receive_msg():
         else:
             print("Packet out of order. Retransmitting highest in order-sequence number.")
             reply_ack(serverSocket, clientAddress, expected_seq_base, highest_base)
-        
 
+
+def close_connection(serverSocket, fin_msg, clientAddress):     
+    server_state = "ESTAB"
+
+    # Send ACK
+    
 
 def main():
     global serverSocket
     # Define Server Port
-    serverPort = 12000
+    serverPort = 12005
 
     # Create UDP Socket
     serverSocket = socket(AF_INET, SOCK_DGRAM)
