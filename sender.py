@@ -3,7 +3,7 @@ import random
 import threading
 import time
 
-TIME_OUT = 2
+TIME_OUT = 5
 WINDOW_SIZE_N = 4
 
 #Global variables
@@ -21,36 +21,52 @@ lock = threading.Lock()
 cwnd = 4
 
 
+
 def three_way_handshake(clientSocket, serverName, serverPort):
     # Send TCP SYN msg
     # seq_num = random.randint(0, 10000)
     global next_seq_num, base
     seq_num = 0
     msg = f"1,{seq_num},0,0" # message = (SYNbit, SeqNum, ACKbit, ACKnum)
-    clientSocket.sendto(msg.encode(), (serverName, serverPort))
-    print(f"Sent: SYN, seq={seq_num}")
 
-    # Receive SYNAck
-    synAck_msg, serverAddress = clientSocket.recvfrom(2048)
-    synAck_msg = synAck_msg.decode().split(',')
-    if (synAck_msg != None):
-        print(f"Reply Received! {synAck_msg}")
-
-    if ((synAck_msg[0] == '1') and (synAck_msg[2] == '1')):
-        print(f"Received: SYNACK(x), seq={synAck_msg[1]}, ACKnum={synAck_msg[3]}")
-        seq_num = synAck_msg[1]
-        next_seq_num = int(seq_num) + 1
-        base = next_seq_num
-        
-        # Send ACK for SYNACK
-        ack_num = int(synAck_msg[1]) + 1
-        msg = f"0,0,1,{ack_num}"
+    for i in range(5):
+        # Send SYN
         clientSocket.sendto(msg.encode(), (serverName, serverPort))
-        print(f"Sent: ACK, ACKnum={ack_num}")
-        print("! Three-Way Handshake Completed !\n")
+        print(f"Sent: SYN, seq={seq_num}\n")
 
-        return True
+        # Wait 5 seconds for SYNACK
+        clientSocket.settimeout(5)
+        try:
+            # Receive SYNAck
+            synAck_msg, serverAddress = clientSocket.recvfrom(2048)
+            synAck_msg = synAck_msg.decode().split(',')
+            if (synAck_msg != None):
+                print(f"Reply Received! {synAck_msg}")
 
+            if ((synAck_msg[0] == '1') and (synAck_msg[2] == '1')):
+                print(f"Received: SYNACK(x), seq={synAck_msg[1]}, ACKnum={synAck_msg[3]}\n")
+                if (int(synAck_msg[3]) == seq_num + 1):
+                    next_seq_num = int(synAck_msg[3])
+                    base = next_seq_num
+        
+                    # Send ACK for SYNACK
+                    ack_num = int(synAck_msg[1]) + 1
+                    msg = f"0,0,1,{ack_num}"
+                    clientSocket.sendto(msg.encode(), (serverName, serverPort))
+                    print(f"Sent: ACK, ACKnum={ack_num}")
+                    print("! Three-Way Handshake Completed, Connection Established !\n")
+                    clientSocket.settimeout(None)
+
+                    return True
+                
+                else:
+                    print(f"Incorect packet received, expected ACKnum = {seq_num + 1}")
+
+        except TimeoutError:
+            print("Timeout waiting for SYNACK")
+    
+    print("Failed to receive SYNACK! Terminating...")
+    clientSocket.settimeout(None)
     return False
 
 def timeout():
@@ -95,10 +111,10 @@ def send_packet(seq, clientSocket, serverName, serverPort):
     if seq in msg_buffer:
         message = msg_buffer[seq]
         message = f"{seq}:{message}" #Format message: seq num:message
-        print(f"Sent: seq={seq}")
         clientSocket.sendto(message.encode(), (serverName, serverPort))
+        print(f"Sent: seq={seq}")
+        
     
-
 def send_message(message, clientSocket, serverName, serverPort):
     global msg_buffer, next_seq_num, used_window, expected_ack, base, cwnd
   
@@ -152,6 +168,133 @@ def receive_ack():
                 print(f"Ignore duplicate ack:{num}")
 
 
+def close_connection(clientSocket, serverName, serverPort):
+    global next_seq_num, thread_continue
+    thread_continue = False
+    client_state = "ESTAB"
+
+    # Send FIN Packet
+    msg = f"FIN:{next_seq_num}"
+
+    for i in range(5):
+        clientSocket.sendto(msg.encode(), (serverName, serverPort))
+        print(f"Sent: FIN, seq={next_seq_num}\n")
+        client_state = "FIN_WAIT_1"
+
+        # Wait 5 seconds for ACK
+        clientSocket.settimeout(5)
+        try:
+            # Receive ACK
+            ack_msg, serverAddress = clientSocket.recvfrom(2048)
+            ack_msg = ack_msg.decode().split(':')
+            if (ack_msg != None):
+                print(f"Message Received! {ack_msg}")
+
+            if (ack_msg[0] == 'ACK'):
+                print(f"Received: ACK, ACKnum = {ack_msg[1]}")
+
+                # Correct packet received
+                if (int(ack_msg[1]) == next_seq_num + 1):
+                    client_state = "FIN_WAIT_2"
+                    print("Now waiting for server FIN\n")
+                    clientSocket.settimeout(None)
+                    break
+
+                # Incorrect packet received
+                else:
+
+                    print(f"Incorrect packet received, expected ACKnum = {next_seq_num + 1}")
+
+            else:
+                print("Packet received is not ACK packet")
+
+        except TimeoutError:
+            print("Timeout waiting for ACK")
+
+    if client_state == "FIN_WAIT_2":
+        # Wait for Server FIN
+
+        for i in range(5):
+            # Wait 5 seconds for FIN message
+            clientSocket.settimeout(5)
+            try:
+                # Receive FIN
+                fin_msg, serverAddress = clientSocket.recvfrom(2048)
+                fin_msg = fin_msg.decode().split(':')
+                if (fin_msg != None):
+                    print(f"Message Received! {fin_msg}")
+
+                if (fin_msg[0] == 'FIN'):
+                    print(f"Received: FIN, seq = {fin_msg[1]}")
+
+                    # Reply with ACK
+                    msg = f"ACK:{int(fin_msg[1]) + 1}"
+                    clientSocket.sendto(msg.encode(), (serverName, serverPort))
+                    print(f"Sent: ACK, ACKnum = {int(fin_msg[1]) + 1}\n")
+                    client_state = "TIMED_WAIT"
+                    clientSocket.settimeout(None)
+                    break
+                
+                # # When it's a data packet
+                # else:
+                #     # TODO
+                #     print("HELLO")
+
+            except TimeoutError:
+                print("Timeout waiting for FIN")
+
+        # No FIN received
+        if client_state != "TIMED_WAIT":
+            print("Error: No FIN received from sender, shutting down...")
+            clientSocket.settimeout(None)
+            clientSocket.close()
+            return
+
+
+    # Failed getting ACK
+    else:
+        print("Error: Failed receiving ACK packet, shutting down...")
+        clientSocket.settimeout(None)
+        clientSocket.close()
+        return
+
+    while client_state == "TIMED_WAIT":
+        # Wait for 2*max segment lifetime (30 seconds)
+        clientSocket.settimeout(30)
+
+        try:
+            # Receive any retransmission of FIN packet
+            fin_msg, serverAddress = clientSocket.recvfrom(2048)
+            fin_msg = fin_msg.decode().split(':')
+            if (fin_msg != None):
+                print(f"Message Received! {fin_msg}")
+
+            if (fin_msg[0] == 'FIN'):
+                print(f"Received: FIN, seq = {fin_msg[1]}")
+
+                # Reply with ACK
+                msg = f"ACK,{int(fin_msg[1]) + 1}"
+                clientSocket.sendto(msg.encode(), (serverName, serverPort))
+                print(f"Sent: ACK, ACKnum = {int(fin_msg[1]) + 1}\n")
+
+                client_state = "TIMED_WAIT"               
+                
+            else:
+                print("Packet received is not FIN packet")
+
+        except TimeoutError:
+            print("Sender closed connection")
+            client_state = "CLOSED"
+            clientSocket.settimeout(None)
+            clientSocket.close()
+            return
+    
+    # Failed receiving FIN
+    print("Error: Failed receiving FIN packet, shutting down...")
+    clientSocket.settimeout(None)
+    clientSocket.close()
+    return
+
 
 def main():
     global serverName, serverPort, clientSocket
@@ -160,28 +303,31 @@ def main():
     if (init.strip() == '-I'):
         # Define Server IP Address and Port
         serverName = 'localhost'
-        serverPort = 12000
+        serverPort = 12006
 
         # Create UDP Socket for Client
         clientSocket = socket(AF_INET, SOCK_DGRAM)
         
         # Three-Way Handshake
         if (three_way_handshake(clientSocket, serverName, serverPort) == True):
-            receivingAck_t = threading.Thread(target=receive_ack)
-            receivingAck_t.start()
+            # receivingAck_t = threading.Thread(target=receive_ack)
+            # receivingAck_t.start()
             
             while True:
-                # Get keyboard input 
+                # Get keyboard input
+                time.sleep(0.1) 
                 message = input("Input Lowercase Sentence or '-C' to close: ")
                 if (message.strip() == '-C'):
                     # Close client socket
-                    print("Connection Closed")
+                    # receivingAck_t.join()
+                    print("Closing connection...")
+                    close_connection(clientSocket, serverName, serverPort)
+                    # print("Connection Closed")
                     clientSocket.close()
                     break
 
-
                 send_message(message, clientSocket, serverName, serverPort)
-                
+                receive_ack()
                 # Read reply characters from socket into string
                 # modifiedMessage, serverAddress = clientSocket.recvfrom(2048)
 
