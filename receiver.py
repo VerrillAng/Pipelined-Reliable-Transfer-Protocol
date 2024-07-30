@@ -1,7 +1,7 @@
 from socket import *
 import random 
 import sys
-
+import time
 
 expected_seq_base = 0
 highest_base = 0
@@ -61,13 +61,12 @@ def three_way_handshake(serverSocket):
 #ack number: the cumulative ack number
 def reply_ack(serverSocket, clientAddress, acknumber, base):
     message = f"{base,acknumber}" #reply format: the base of the message, the cumulative ack number
-    print(message)
     serverSocket.sendto(message.encode(), clientAddress)
     print(f"Sent: ACK={acknumber}")
 
 def receive_msg():
     global expected_seq_base, highest_base, serverSocket
-
+    
     while True:
         msg, clientAddress = serverSocket.recvfrom(2048)
         print("let's try")
@@ -82,7 +81,7 @@ def receive_msg():
         base = int(msg[0].strip())
         message_string = msg[1].strip()
         message_length = len(message_string)
-        print(f"Received: seq={base}")
+        print(f"Received: seq={base} with length={message_length}")
 
         if base == expected_seq_base:
             print("Received packet is in order.")
@@ -157,6 +156,7 @@ def main():
 
     if (three_way_handshake(serverSocket) == True):
         while True:
+            time.sleep(2) #give time for receiver to deliver the packets to application layer 
             receive_msg()
             # # Read from socket
             # message, clientAddress = serverSocket.recvfrom(2048)

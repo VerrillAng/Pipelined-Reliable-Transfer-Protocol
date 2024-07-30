@@ -3,7 +3,7 @@ import random
 import threading
 import time
 
-TIME_OUT = 2
+TIME_OUT = 5
 WINDOW_SIZE_N = 4
 
 #Global variables
@@ -257,7 +257,7 @@ def close_connection(clientSocket, serverName, serverPort):
                 print(f"Sent: ACK, ACKnum = {int(fin_msg[1]) + 1}\n")
 
                 client_state = "TIMED_WAIT"               
-
+                
             else:
                 print("Packet received is not FIN packet")
 
