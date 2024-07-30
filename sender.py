@@ -4,7 +4,7 @@ import threading
 import time
 
 TIME_OUT = 5
-WINDOW_SIZE_N = 4
+
 
 #Global variables
 next_seq_num = 0 #Window Sequence Number
