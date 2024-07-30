@@ -137,7 +137,6 @@ def send_packet(seq, clientSocket, serverName, serverPort):
         clientSocket.sendto(message.encode(), (serverName, serverPort))
         
         
-    
 def send_message(message, clientSocket, serverName, serverPort):
     global msg_buffer, next_seq_num, used_window, expected_ack, base, cwnd
     expectedSentSeq = 0
@@ -196,16 +195,28 @@ def receive_ack():
 
 
 def close_connection(clientSocket, serverName, serverPort):
-    global next_seq_num, thread_continue
-    thread_continue = False
+    global next_seq_num
     client_state = "ESTAB"
+    retransmit = False
 
     # Send FIN Packet
     msg = f"FIN:{next_seq_num}"
 
     for i in range(5):
-        clientSocket.sendto(msg.encode(), (serverName, serverPort))
-        print(f"Sent: FIN, seq={next_seq_num}\n")
+        clientSocket.settimeout(None)
+
+        # Send FIN
+        if no_packet_loss():
+            clientSocket.sendto(msg.encode(), (serverName, serverPort))
+            if retransmit:
+                print(f"Retransmitting... FIN, seq={next_seq_num}")
+            else:
+                print(f"Sent: FIN, seq={next_seq_num}\n")
+
+        else:
+            print(f"Sending...  FIN, seq={next_seq_num}")
+            print(f"!Packet Loss!  FIN, seq={next_seq_num}\n") 
+
         client_state = "FIN_WAIT_1"
 
         # Wait 5 seconds for ACK

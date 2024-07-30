@@ -81,7 +81,7 @@ def receive_msg():
     
     while True:
         msg, clientAddress = serverSocket.recvfrom(2048)
-        print("let's try")
+        print("\n")
         msg = msg.decode().split(':')
 
         # If Close Connection
