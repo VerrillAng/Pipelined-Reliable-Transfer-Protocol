@@ -18,9 +18,8 @@ serverName = ""
 serverPort = 0
 expected_ack = 0
 lock = threading.Lock()
+thread_continue = True
 cwnd = 4
-
-
 
 def three_way_handshake(clientSocket, serverName, serverPort):
     # Send TCP SYN msg
@@ -77,7 +76,6 @@ def timeout():
         print(f"Timeout for seq={base}. Resending packets: {list(msg_buffer.keys())}")
         for i in seq_nums:
             send_packet(i, clientSocket, serverName, serverPort)
-
 
         #Minimum number of cwnd will be 4
         if(cwnd >= 8):
@@ -142,30 +140,29 @@ def receive_ack():
     global base, msg_buffer, active_timers, next_seq_num, receiving_ack, used_window, clientSocket, cwnd
     num = 0
 
-    while True: #ACK: base, acknum
-       
-        reply, _ = clientSocket.recvfrom(2048)
-        reply = reply.decode()
-        reply = reply.strip("()").split(',')
-        reply_base = int(reply[0])
-        num = int(reply[1])
-        with lock:
-            if expected_ack == num:
-                print("\n")
-                print(f"Received ACK:{num}")
-                terminate_timer(base)
-                del msg_buffer[base]
-                used_window -= 1
-                base = num
-                if(base == next_seq_num):
-                    print("All packets acked.")
-                else:
-                    init_timer(base)
+    # while True: #ACK: base, acknum
+    # while thread_continue == True: #ACK: base, acknum
+    reply, _ = clientSocket.recvfrom(2048)
+    reply = reply.decode()
+    reply = reply.strip("()").split(',')
+    reply_base = int(reply[0])
+    num = int(reply[1])
+    with lock:
+        if expected_ack == num:
+            print(f"Received ACK:{num}")
+            terminate_timer(base)
+            del msg_buffer[base]
+            used_window -= 1
+            base = num
+            if(base == next_seq_num):
+                print("All packets acked.\n")
+            else:
+                init_timer(base)
 
                 cwnd = cwnd + 1
 
-            elif num < expected_ack:
-                print(f"Ignore duplicate ack:{num}")
+        elif num < expected_ack:
+            print(f"Ignore duplicate ack:{num}")
 
 
 def close_connection(clientSocket, serverName, serverPort):
@@ -202,7 +199,6 @@ def close_connection(clientSocket, serverName, serverPort):
 
                 # Incorrect packet received
                 else:
-
                     print(f"Incorrect packet received, expected ACKnum = {next_seq_num + 1}")
 
             else:
@@ -249,7 +245,6 @@ def close_connection(clientSocket, serverName, serverPort):
             clientSocket.settimeout(None)
             clientSocket.close()
             return
-
 
     # Failed getting ACK
     else:

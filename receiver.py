@@ -87,6 +87,7 @@ def receive_msg():
             print("Received packet is in order.")
             expected_seq_base += message_length
             highest_base = base
+            time.sleep(2) #give time for receiver to deliver the packets to application layer 
             reply_ack(serverSocket, clientAddress, expected_seq_base, base)    
         else:
             print("Packet out of order. Retransmitting highest in order-sequence number.")
@@ -156,8 +157,9 @@ def main():
 
     if (three_way_handshake(serverSocket) == True):
         while True:
-            time.sleep(2) #give time for receiver to deliver the packets to application layer 
+          
             receive_msg()
+         
             # # Read from socket
             # message, clientAddress = serverSocket.recvfrom(2048)
 
