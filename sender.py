@@ -45,14 +45,19 @@ def three_way_handshake(clientSocket, serverName, serverPort):
         if no_packet_loss():
             clientSocket.sendto(msg.encode(), (serverName, serverPort))
             if retransmit:
-                print(f"Retransmitting... SYN, seq={seq_num}")
+                print(f"Retransmitting... SYN, seq={seq_num}\n")
             else:
-                print(f"Sent: SYN, seq={seq_num}\n")
+                print(f"Sent: SYN, seq = {seq_num}\n")
 
+        else:
+            print(f"Sending... SYN, seq={seq_num}")
+            print(f"!Packet Loss! SYN, seq={seq_num}\n")
 
         # Wait 5 seconds for SYNACK
         clientSocket.settimeout(5)
         try:
+            clientSocket.settimeout(None)
+
             # Receive SYNAck
             synAck_msg, serverAddress = clientSocket.recvfrom(2048)
             synAck_msg = synAck_msg.decode().split(',')
@@ -75,18 +80,20 @@ def three_way_handshake(clientSocket, serverName, serverPort):
                         clientSocket.settimeout(None)
 
                         return True
-                    
-                    clientSocket.settimeout(None)
-                    return True
-                
+                                    
                 else:
                     print(f"Incorect packet received, expected ACKnum = {seq_num + 1}")
+                    retransmit = True
+
+            else:
+                print("Packet received is not SYNACK packet")
+                retransmit = True
 
         except TimeoutError:
             print("Timeout waiting for SYNACK")
+            retransmit = True
     
     print("Failed to receive SYNACK! Terminating...")
-    clientSocket.settimeout(None)
     return False
 
 def timeout():
@@ -199,25 +206,22 @@ def close_connection(clientSocket, serverName, serverPort):
     client_state = "ESTAB"
     retransmit = False
 
-    # Send FIN Packet
-    msg = f"FIN:{next_seq_num}"
-
     for i in range(5):
         clientSocket.settimeout(None)
 
         # Send FIN
+        msg = f"FIN:{next_seq_num}"
         if no_packet_loss():
             clientSocket.sendto(msg.encode(), (serverName, serverPort))
             if retransmit:
                 print(f"Retransmitting... FIN, seq={next_seq_num}")
             else:
                 print(f"Sent: FIN, seq={next_seq_num}\n")
+            client_state = "FIN_WAIT_1"
 
         else:
-            print(f"Sending...  FIN, seq={next_seq_num}")
-            print(f"!Packet Loss!  FIN, seq={next_seq_num}\n") 
-
-        client_state = "FIN_WAIT_1"
+            print(f"Sending... FIN, seq={next_seq_num}")
+            print(f"!Packet Loss! FIN, seq={next_seq_num}\n") 
 
         # Wait 5 seconds for ACK
         clientSocket.settimeout(5)
@@ -241,17 +245,21 @@ def close_connection(clientSocket, serverName, serverPort):
                 # Incorrect packet received
                 else:
                     print(f"Incorrect packet received, expected ACKnum = {next_seq_num + 1}")
+                    retransmit = True
 
             else:
                 print("Packet received is not ACK packet")
+                retransmit = True
 
         except TimeoutError:
             print("Timeout waiting for ACK")
+            retransmit = True
 
     if client_state == "FIN_WAIT_2":
         # Wait for Server FIN
-
         for i in range(5):
+            clientSocket.settimeout(None)
+
             # Wait 5 seconds for FIN message
             clientSocket.settimeout(5)
             try:
@@ -266,10 +274,15 @@ def close_connection(clientSocket, serverName, serverPort):
 
                     # Reply with ACK
                     msg = f"ACK:{int(fin_msg[1]) + 1}"
-                    clientSocket.sendto(msg.encode(), (serverName, serverPort))
-                    print(f"Sent: ACK, ACKnum = {int(fin_msg[1]) + 1}\n")
+
+                    if no_packet_loss():
+                        clientSocket.sendto(msg.encode(), (serverName, serverPort))
+                        print(f"Sent: ACK, ACKnum = {int(fin_msg[1]) + 1}\n")
+                    else:
+                        print(f"Sending... ACK, ACKnum = {int(fin_msg[1]) + 1}")
+                        print(f"!Packet Loss! ACK, ACKnum = {int(fin_msg[1]) + 1}\n")
+
                     client_state = "TIMED_WAIT"
-                    clientSocket.settimeout(None)
                     break
                 
                 # # When it's a data packet
@@ -287,7 +300,7 @@ def close_connection(clientSocket, serverName, serverPort):
             clientSocket.close()
             return
 
-    # Failed getting ACK
+    # Failed getting ACK in FIN_WAIT_1
     else:
         print("Error: Failed receiving ACK packet, shutting down...")
         clientSocket.settimeout(None)
@@ -310,8 +323,12 @@ def close_connection(clientSocket, serverName, serverPort):
 
                 # Reply with ACK
                 msg = f"ACK,{int(fin_msg[1]) + 1}"
-                clientSocket.sendto(msg.encode(), (serverName, serverPort))
-                print(f"Sent: ACK, ACKnum = {int(fin_msg[1]) + 1}\n")
+                if no_packet_loss():    
+                    clientSocket.sendto(msg.encode(), (serverName, serverPort))
+                    print(f"Sent: ACK, ACKnum = {int(fin_msg[1]) + 1}\n")
+                else:
+                    print(f"Sending... ACK, ACKnum = {int(fin_msg[1]) + 1}")
+                    print(f"!Packet Loss! ACK, ACKnum = {int(fin_msg[1]) + 1}\n")
 
                 client_state = "TIMED_WAIT"               
                 
