@@ -9,8 +9,8 @@ serverSocket = 0
 
 # TODO: Add this code
 def no_packet_loss():
-    # 50% chance of packet loss
-    if random.random() > 0.3:
+    # 50% chance of no packet loss
+    if random.random() > 0.1:
         # No loss
         return True
     else:
@@ -101,6 +101,8 @@ def receive_msg():
 
         # If Close Connection
         if msg[0] == "FIN":
+            print(f"Message Received! {msg}")
+            print(f"Received: FIN, seq={msg[1]}")
             close_connection(serverSocket, msg, clientAddress)
             sys.exit()
 

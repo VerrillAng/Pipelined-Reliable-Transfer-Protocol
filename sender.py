@@ -24,7 +24,7 @@ cwnd = 4
 # TODO: Add this code
 def no_packet_loss():
     # 50% chance of packet loss
-    if random.random() > 0.3:
+    if random.random() > 0.1:
         # No loss
         return True
     else:
@@ -56,8 +56,6 @@ def three_way_handshake(clientSocket, serverName, serverPort):
         # Wait 5 seconds for SYNACK
         clientSocket.settimeout(5)
         try:
-            clientSocket.settimeout(None)
-
             # Receive SYNAck
             synAck_msg, serverAddress = clientSocket.recvfrom(2048)
             synAck_msg = synAck_msg.decode().split(',')
@@ -94,6 +92,7 @@ def three_way_handshake(clientSocket, serverName, serverPort):
             retransmit = True
     
     print("Failed to receive SYNACK! Terminating...")
+    clientSocket.settimeout(None)
     return False
 
 def timeout():
@@ -214,14 +213,14 @@ def close_connection(clientSocket, serverName, serverPort):
         if no_packet_loss():
             clientSocket.sendto(msg.encode(), (serverName, serverPort))
             if retransmit:
-                print(f"Retransmitting... FIN, seq={next_seq_num}")
+                print(f"Retransmitting... FIN, seq={next_seq_num}]n")
             else:
                 print(f"Sent: FIN, seq={next_seq_num}\n")
             client_state = "FIN_WAIT_1"
 
         else:
             print(f"Sending... FIN, seq={next_seq_num}")
-            print(f"!Packet Loss! FIN, seq={next_seq_num}\n") 
+            print(f"!Packet Loss! FIN, seq={next_seq_num}\n")
 
         # Wait 5 seconds for ACK
         clientSocket.settimeout(5)
@@ -322,7 +321,7 @@ def close_connection(clientSocket, serverName, serverPort):
                 print(f"Received: FIN, seq = {fin_msg[1]}")
 
                 # Reply with ACK
-                msg = f"ACK,{int(fin_msg[1]) + 1}"
+                msg = f"ACK:{int(fin_msg[1]) + 1}"
                 if no_packet_loss():    
                     clientSocket.sendto(msg.encode(), (serverName, serverPort))
                     print(f"Sent: ACK, ACKnum = {int(fin_msg[1]) + 1}\n")
