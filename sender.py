@@ -24,7 +24,7 @@ cwnd = 4
 # TODO: Add this code
 def no_packet_loss():
     # 50% chance of packet loss
-    if random.random() > 0.5:
+    if random.random() > 0.3:
         # No loss
         return True
     else:
@@ -104,7 +104,7 @@ def timeout():
                 cwnd = cwnd // 2
             else:
                 cwnd = 4
-                
+
             index = cwnd
             keys = list(msg_buffer.keys())
             keys_to_delete = keys[index:]
@@ -135,26 +135,31 @@ def send_packet(seq, clientSocket, serverName, serverPort):
         message = msg_buffer[seq]
         message = f"{seq}:{message}" #Format message: seq num:message
         clientSocket.sendto(message.encode(), (serverName, serverPort))
-        print(f"Sent: seq={seq}")
+        
         
     
 def send_message(message, clientSocket, serverName, serverPort):
     global msg_buffer, next_seq_num, used_window, expected_ack, base, cwnd
-  
+    expectedSentSeq = 0
     with lock:
         msg_buffer[next_seq_num] = message
         message_length = len(message)
         
         # Send packets within the window size
         if used_window < cwnd:
-            send_packet(next_seq_num, clientSocket, serverName, serverPort)
+            expectedSentSeq = next_seq_num 
+            next_seq_num += message_length #have to be done first to account for probability of next packet loss
+            used_window += 1
+            print(f"Sent: seq={expectedSentSeq}")
+
+            if no_packet_loss():
+                send_packet(expectedSentSeq, clientSocket, serverName, serverPort)
             
-            if base == next_seq_num:
-                init_timer(next_seq_num)
+            if base == expectedSentSeq:
+                init_timer(expectedSentSeq)
                 expected_ack = base + message_length
     
-            next_seq_num += message_length
-            used_window += 1
+            
         else:
             print(f"CWND is full. Resend or wait for ACK reply.")
 

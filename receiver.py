@@ -7,6 +7,18 @@ expected_seq_base = 0
 highest_base = 0
 serverSocket = 0
 
+# TODO: Add this code
+def no_packet_loss():
+    # 50% chance of packet loss
+    if random.random() > 0.3:
+        # No loss
+        return True
+    else:
+        # Loss
+        print("- Packet Loss -")
+        return False
+
+
 def three_way_handshake(serverSocket):
     global expected_seq_base
     syn_msg, clientAddress = serverSocket.recvfrom(2048)
@@ -88,11 +100,23 @@ def receive_msg():
             expected_seq_base += message_length
             highest_base = base
             time.sleep(2) #give time for receiver to deliver the packets to application layer 
-            reply_ack(serverSocket, clientAddress, expected_seq_base, base)    
+            if no_packet_loss():
+                reply_ack(serverSocket, clientAddress, expected_seq_base, base)    
+        elif base < expected_seq_base: #Lost in ACK
+            print(f"Packet out of order. Retransmitting ACK for sequence={base}")
+            expected_seq_base = base + message_length
+            highest_base = base
+            if no_packet_loss():
+                reply_ack(serverSocket, clientAddress, expected_seq_base, base) 
         else:
             print("Packet out of order. Retransmitting highest in order-sequence number.")
-            reply_ack(serverSocket, clientAddress, expected_seq_base, highest_base)
+            if no_packet_loss():
+                reply_ack(serverSocket, clientAddress, expected_seq_base, highest_base)
 
+def reply_ack(serverSocket, clientAddress, acknumber, base):
+    message = f"{base,acknumber}" #reply format: the base of the message, the cumulative ack number
+    serverSocket.sendto(message.encode(), clientAddress)
+    print(f"Sent: ACK={acknumber}")
 
 def close_connection(serverSocket, fin_msg, clientAddress):     
     server_state = "ESTAB"
