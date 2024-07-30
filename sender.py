@@ -78,8 +78,12 @@ def timeout():
             send_packet(i, clientSocket, serverName, serverPort)
 
         #Minimum number of cwnd will be 4
-        if(cwnd >= 8):
-            cwnd = cwnd // 2
+        if(cwnd >= 5):
+            if(cwnd >= 8):
+                cwnd = cwnd // 2
+            else:
+                cwnd = 4
+                
             index = cwnd
             keys = list(msg_buffer.keys())
             keys_to_delete = keys[index:]
