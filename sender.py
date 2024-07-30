@@ -21,17 +21,34 @@ lock = threading.Lock()
 thread_continue = True
 cwnd = 4
 
+# TODO: Add this code
+def no_packet_loss():
+    # 50% chance of packet loss
+    if random.random() > 0.5:
+        # No loss
+        return True
+    else:
+        # Loss
+        print("- Packet Loss -")
+        return False
+
 def three_way_handshake(clientSocket, serverName, serverPort):
     # Send TCP SYN msg
     # seq_num = random.randint(0, 10000)
     global next_seq_num, base
     seq_num = 0
     msg = f"1,{seq_num},0,0" # message = (SYNbit, SeqNum, ACKbit, ACKnum)
+    retransmit = False
 
     for i in range(5):
         # Send SYN
-        clientSocket.sendto(msg.encode(), (serverName, serverPort))
-        print(f"Sent: SYN, seq={seq_num}\n")
+        if no_packet_loss():
+            clientSocket.sendto(msg.encode(), (serverName, serverPort))
+            if retransmit:
+                print(f"Retransmitting... SYN, seq={seq_num}")
+            else:
+                print(f"Sent: SYN, seq={seq_num}\n")
+
 
         # Wait 5 seconds for SYNACK
         clientSocket.settimeout(5)
@@ -49,13 +66,17 @@ def three_way_handshake(clientSocket, serverName, serverPort):
                     base = next_seq_num
         
                     # Send ACK for SYNACK
-                    ack_num = int(synAck_msg[1]) + 1
-                    msg = f"0,0,1,{ack_num}"
-                    clientSocket.sendto(msg.encode(), (serverName, serverPort))
-                    print(f"Sent: ACK, ACKnum={ack_num}")
-                    print("! Three-Way Handshake Completed, Connection Established !\n")
-                    clientSocket.settimeout(None)
+                    if no_packet_loss():
+                        ack_num = int(synAck_msg[1]) + 1
+                        msg = f"0,0,1,{ack_num}"
+                        clientSocket.sendto(msg.encode(), (serverName, serverPort))
+                        print(f"Sent: ACK, ACKnum={ack_num}")
+                        print("! Three-Way Handshake Completed, Connection Established !\n")
+                        clientSocket.settimeout(None)
 
+                        return True
+                    
+                    clientSocket.settimeout(None)
                     return True
                 
                 else:
