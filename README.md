@@ -3,25 +3,12 @@
 Socket Type: UDP Socket
 Mechanism:
 ● Connection-oriented: Three-Way Handshake
-○ When starting both the receiver.py and sender.py, in the sender the user
-needs to type “-I” to start the connection.
-○ When the receiver starts, it will be open for connection, the sender needs
-to initialize the connection with the receiver first, by sending a SYN packet
-to the receiver, with seq number x. This will also set a timer in our code,
-which is 5 seconds, this timer is to wait to receive a SYNACK packet with
-the expected ACKnum (x + 1) from the receiver.
-■ If the 5 seconds have passed, and no SYNACK packet with the
-correct ACKnum is received, the sender will retransmit the SYN
-packet to the receiver, for 5 attempts. If there’s still no correct
-SYNACK packet, the sender will close, failing to connect to the
-receiver.
-○ After the receiver receives the SYN packet, it will respond with a SYNACK
-packet with seq = y. This will start a 5 second timer in our code, expecting
-an ACK packet from the sender with ACKnum y + 1.
-■ If the 5 seconds have passed, and no ACK packet is received from
-the sender with the correct ACKnum, the receiver will retransmit the
-SYNACK packet for 5 tries. If still no correct ACK packet is
-received, the receiver will close, failing to establish a connection.
+  ○ When starting both the receiver.py and sender.py, in the sender the user needs to type “-I” to start the connection.
+  ○ When the receiver starts, it will be open for connection, the sender needs to initialize the connection with the receiver first, by sending a SYN packet to the receiver, with seq number x. This will also set a timer in our code, which is 5 seconds, this timer is to wait to receive a SYNACK packet with the expected ACKnum (x + 1) from the receiver.
+    ■ If the 5 seconds have passed, and no SYNACK packet with the correct ACKnum is received, the sender will retransmit the SYN packet to the receiver, for 5 attempts. If there’s still no correct SYNACK packet, the sender will close, failing to connect to the receiver.
+  ○ After the receiver receives the SYN packet, it will respond with a SYNACK packet with seq = y. This will start a 5 second timer in our code, expecting an ACK packet from the sender with ACKnum y + 1.
+  ■ If the 5 seconds have passed, and no ACK packet is received from the sender with the correct ACKnum, the receiver will retransmit the SYNACK packet for 5 tries. If still no correct ACK packet is received, the receiver will close, failing to establish a connection.
+  
 ● Pipelined Protocol: Go-Back-N
 ○ The pipeline protocol that we have chosen for this project is Go-Back-N.
 Together with this mechanism, we incorporate the AIMD congestion
