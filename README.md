@@ -1,6 +1,6 @@
 # Pipelined-Reliable-Transfer-Protocol
 
-- Socket Type:
+### - Socket Type:
   - UDP Socket
 
 Mechanism:
