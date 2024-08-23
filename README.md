@@ -1,6 +1,7 @@
 # Pipelined-Reliable-Transfer-Protocol
 
-### Socket Type: UDP Socket
+- Socket Type:
+  - UDP Socket
 
 Mechanism:
 ● Connection-oriented: Three-Way Handshake
