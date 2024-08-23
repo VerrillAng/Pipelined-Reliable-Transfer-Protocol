@@ -1,6 +1,7 @@
 # Pipelined-Reliable-Transfer-Protocol
 
-Socket Type: UDP Socket
+### Socket Type: UDP Socket
+
 Mechanism:
 ● Connection-oriented: Three-Way Handshake
   ○ When starting both the receiver.py and sender.py, in the sender the user needs to type “-I” to start the connection.
